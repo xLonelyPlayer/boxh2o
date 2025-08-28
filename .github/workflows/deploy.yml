@@ -1,0 +1,85 @@
+name: Deploy to GCP
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GKE_CLUSTER: boxh2o-gke
+  GKE_ZONE: us-central1
+  IMAGE_API: boxh2o-api
+  IMAGE_FRONTEND: boxh2o-frontend
+
+jobs:
+  setup-build-publish-deploy:
+    name: Setup, Build, Publish, and Deploy
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Google Auth
+      id: auth
+      uses: 'google-github-actions/auth@v1'
+      with:
+        workload_identity_provider: '${{ secrets.WIF_PROVIDER }}'
+        service_account: '${{ secrets.WIF_SERVICE_ACCOUNT }}'
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
+
+    - name: Configure Docker
+      run: |
+        gcloud auth configure-docker us-central1-docker.pkg.dev
+
+    - name: Get GKE credentials
+      uses: google-github-actions/get-gke-credentials@v1
+      with:
+        cluster_name: ${{ env.GKE_CLUSTER }}
+        location: ${{ env.GKE_ZONE }}
+
+    - name: Build API
+      run: |
+        docker build \
+          --tag "us-central1-docker.pkg.dev/$PROJECT_ID/$IMAGE_API:$GITHUB_SHA" \
+          --build-arg GITHUB_SHA="$GITHUB_SHA" \
+          --build-arg GITHUB_REF="$GITHUB_REF" \
+          ./api
+
+    - name: Build Frontend
+      run: |
+        docker build \
+          --tag "us-central1-docker.pkg.dev/$PROJECT_ID/$IMAGE_FRONTEND:$GITHUB_SHA" \
+          --build-arg GITHUB_SHA="$GITHUB_SHA" \
+          --build-arg GITHUB_REF="$GITHUB_REF" \
+          ./frontend
+
+    - name: Publish API
+      run: |
+        docker push "us-central1-docker.pkg.dev/$PROJECT_ID/$IMAGE_API:$GITHUB_SHA"
+
+    - name: Publish Frontend
+      run: |
+        docker push "us-central1-docker.pkg.dev/$PROJECT_ID/$IMAGE_FRONTEND:$GITHUB_SHA"
+
+    - name: Set up Kustomize
+      run: |
+        curl -sfLo kustomize https://github.com/kubernetes-sigs/kustomize/releases/download/v3.1.0/kustomize_3.1.0_linux_amd64
+        chmod u+x ./kustomize
+
+    - name: Deploy
+      run: |
+        ./kustomize edit set image us-central1-docker.pkg.dev/$PROJECT_ID/$IMAGE_API:$GITHUB_SHA
+        ./kustomize edit set image us-central1-docker.pkg.dev/$PROJECT_ID/$IMAGE_FRONTEND:$GITHUB_SHA
+        ./kustomize build . | kubectl apply -f -
+        kubectl rollout status deployment/api
+        kubectl rollout status deployment/frontend
+        kubectl get services -o wide
