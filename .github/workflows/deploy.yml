@@ -8,14 +8,11 @@ on:
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  GKE_CLUSTER: boxh2o-gke
-  GKE_ZONE: us-central1
-  IMAGE_API: boxh2o-api
-  IMAGE_FRONTEND: boxh2o-frontend
+  BUCKET_NAME: ${{ secrets.GCP_PROJECT_ID }}-website
 
 jobs:
-  setup-build-publish-deploy:
-    name: Setup, Build, Publish, and Deploy
+  build-and-deploy:
+    name: Build and Deploy
     runs-on: ubuntu-latest
 
     permissions:
@@ -25,6 +22,21 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend-static/package-lock.json
+
+    - name: Install dependencies
+      working-directory: frontend-static
+      run: npm ci
+
+    - name: Build Angular app
+      working-directory: frontend-static
+      run: npm run build --configuration production
 
     - name: Google Auth
       id: auth
@@ -36,50 +48,13 @@ jobs:
     - name: Set up Cloud SDK
       uses: google-github-actions/setup-gcloud@v1
 
-    - name: Configure Docker
+    - name: Upload to Cloud Storage
       run: |
-        gcloud auth configure-docker us-central1-docker.pkg.dev
+        gsutil -m rsync -r frontend-static/dist/frontend gs://$BUCKET_NAME
 
-    - name: Get GKE credentials
-      uses: google-github-actions/get-gke-credentials@v1
-      with:
-        cluster_name: ${{ env.GKE_CLUSTER }}
-        location: ${{ env.GKE_ZONE }}
-
-    - name: Build API
+    - name: Set Cache-Control metadata
       run: |
-        docker build \
-          --tag "us-central1-docker.pkg.dev/$PROJECT_ID/$IMAGE_API:$GITHUB_SHA" \
-          --build-arg GITHUB_SHA="$GITHUB_SHA" \
-          --build-arg GITHUB_REF="$GITHUB_REF" \
-          ./api
-
-    - name: Build Frontend
-      run: |
-        docker build \
-          --tag "us-central1-docker.pkg.dev/$PROJECT_ID/$IMAGE_FRONTEND:$GITHUB_SHA" \
-          --build-arg GITHUB_SHA="$GITHUB_SHA" \
-          --build-arg GITHUB_REF="$GITHUB_REF" \
-          ./frontend
-
-    - name: Publish API
-      run: |
-        docker push "us-central1-docker.pkg.dev/$PROJECT_ID/$IMAGE_API:$GITHUB_SHA"
-
-    - name: Publish Frontend
-      run: |
-        docker push "us-central1-docker.pkg.dev/$PROJECT_ID/$IMAGE_FRONTEND:$GITHUB_SHA"
-
-    - name: Set up Kustomize
-      run: |
-        curl -sfLo kustomize https://github.com/kubernetes-sigs/kustomize/releases/download/v3.1.0/kustomize_3.1.0_linux_amd64
-        chmod u+x ./kustomize
-
-    - name: Deploy
-      run: |
-        ./kustomize edit set image us-central1-docker.pkg.dev/$PROJECT_ID/$IMAGE_API:$GITHUB_SHA
-        ./kustomize edit set image us-central1-docker.pkg.dev/$PROJECT_ID/$IMAGE_FRONTEND:$GITHUB_SHA
-        ./kustomize build . | kubectl apply -f -
-        kubectl rollout status deployment/api
-        kubectl rollout status deployment/frontend
-        kubectl get services -o wide
+        gsutil -m setmeta -h "Cache-Control:public, max-age=3600" gs://$BUCKET_NAME/**.css
+        gsutil -m setmeta -h "Cache-Control:public, max-age=3600" gs://$BUCKET_NAME/**.js
+        gsutil -m setmeta -h "Cache-Control:public, max-age=86400" gs://$BUCKET_NAME/assets/**
+        gsutil setmeta -h "Cache-Control:no-cache, no-store, must-revalidate" gs://$BUCKET_NAME/index.html

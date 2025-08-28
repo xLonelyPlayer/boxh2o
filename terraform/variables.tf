@@ -9,6 +9,11 @@ variable "region" {
   default     = "us-central1"
 }
 
+variable "domain_name" {
+  description = "Nome do domínio para o site (ex: app.boxh2o.com)"
+  type        = string
+}
+
 variable "subnet_cidr" {
   description = "CIDR range para a subnet"
   type        = string

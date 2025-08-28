@@ -1,27 +1,24 @@
-# BoxH2O - Aplicação Web na GCP
+# BoxH2O - Aplicação Web com Angular, Cloud Storage e CDN
 
 ## Visão Geral
-Este projeto implementa uma aplicação web moderna usando a seguinte stack:
-- Frontend: Angular
-- Backend: .NET Core API
-- Banco de Dados: PostgreSQL
-- Infraestrutura: Google Cloud Platform (GCP)
+Este projeto implementa uma aplicação web Angular hospedada no Google Cloud Storage e distribuída globalmente através do Cloud CDN, oferecendo alta performance e baixa latência.
+
+## Arquitetura
+- **Frontend**: Angular (Static Site)
+- **Hospedagem**: Google Cloud Storage
+- **CDN**: Google Cloud CDN
+- **SSL**: Google-managed SSL certificates
 
 ## Pré-requisitos
-- Docker e Docker Compose
+- Node.js e npm
 - Google Cloud SDK
 - Terraform
-- kubectl
-- Node.js e npm
-- .NET SDK
 
 ## Estrutura do Projeto
 ```
-├── api/                # Backend .NET Core
-├── frontend/          # Frontend Angular
-├── terraform/         # Configurações IaC
-├── k8s/               # Manifestos Kubernetes
-└── .github/workflows  # Pipeline CI/CD
+├── frontend-static/     # Aplicação Angular
+├── terraform/           # Configurações IaC
+└── .github/workflows    # Pipeline CI/CD
 ```
 
 ## Configuração do Ambiente Local
@@ -32,9 +29,11 @@ git clone https://github.com/seu-usuario/boxh2o.git
 cd boxh2o
 ```
 
-2. Inicie os serviços localmente:
+2. Instale as dependências e execute o frontend:
 ```bash
-docker-compose up -d
+cd frontend-static
+npm install
+ng serve
 ```
 
 ## Implantação na GCP
@@ -43,10 +42,10 @@ docker-compose up -d
 
 1. Crie um novo projeto na GCP
 2. Habilite as APIs necessárias:
-   - Kubernetes Engine API
-   - Cloud SQL Admin API
-   - Container Registry API
+   - Cloud Storage API
+   - Cloud CDN API
    - Cloud Build API
+   - Certificate Manager API
 
 ### 2. Configuração do Terraform
 
@@ -76,7 +75,7 @@ terraform apply
    - WIF_PROVIDER
    - WIF_SERVICE_ACCOUNT
 
-### 4. Implantação
+### 4. Deploy
 
 1. Faça push para a branch main:
 ```bash
@@ -84,26 +83,40 @@ git push origin main
 ```
 
 2. O GitHub Actions irá:
-   - Construir as imagens Docker
-   - Publicar no Artifact Registry
-   - Implantar no GKE
+   - Buildar a aplicação Angular
+   - Fazer upload dos arquivos para o Cloud Storage
+   - Configurar os headers de cache
 
 ## Acesso à Aplicação
 
-- Frontend: https://app.boxh2o.com
-- API: https://api.boxh2o.com
+- Produção: https://app.boxh2o.com
 
-## Monitoramento e Logs
+## Otimizações
 
-- Acesse o Cloud Monitoring para métricas
-- Utilize o Cloud Logging para logs
-- Configure alertas no Cloud Monitoring
+### Cache
+- Arquivos estáticos (CSS/JS): Cache de 1 hora
+- Assets (imagens/fontes): Cache de 24 horas
+- index.html: Sem cache para atualizações imediatas
+
+### Performance
+- Distribuição global via Cloud CDN
+- Compressão automática de arquivos
+- SSL/TLS gerenciado pelo Google
+
+## Monitoramento
+
+- Cloud Monitoring para métricas de CDN
+- Cloud Logging para logs de acesso
+- Alertas configuráveis para:
+  - Erros de cache
+  - Latência
+  - Taxa de hit/miss do CDN
 
 ## Segurança
 
-- Todas as comunicações são criptografadas via TLS
-- Banco de dados acessível apenas pela VPC privada
-- Autenticação via Workload Identity Federation
+- HTTPS forçado
+- Headers de segurança automáticos
+- Certificados SSL gerenciados automaticamente
 
 ## Suporte
 
