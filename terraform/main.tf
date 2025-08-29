@@ -91,11 +91,11 @@ resource "google_sql_database_instance" "instance" {
     }
 
     backup_configuration {
-      enabled = true
+      enabled = false
     }
   }
 
-  deletion_protection = true
+  deletion_protection = false
 }
 
 resource "google_sql_database" "database" {

@@ -1,0 +1,79 @@
+# Arquiteto GCP: .gitignore consolidado para Monorepo (.NET, Angular, Terraform, Docker)
+
+# 1. Ignorados Globais e de Sistema Operacional
+# ===============================================
+# Arquivos gerados por SOs que não devem estar no controle de versão
+.DS_Store
+Thumbs.db
+*.log
+*.swp
+
+# 2. .NET / Visual Studio
+# ===============================================
+# Arquivos de compilação e binários
+[Bb]in/
+[Oo]bj/
+
+# Arquivos de configuração de usuário específicos da IDE
+*.user
+*.suo
+.vs/
+.idea/
+
+# Pacotes NuGet (embora o padrão seja usar um cache global, é bom garantir)
+packages/
+
+# Arquivos de segredos locais do .NET. NUNCA comitar segredos.
+secrets.json
+
+# Saída de publicação
+publish/
+
+# 3. Angular / Node.js
+# ===============================================
+# Dependências. A pasta mais importante a ser ignorada.
+# Esta pasta é recriada com 'npm install'.
+node_modules/
+
+# Saída de build do Angular
+dist/
+tmp/
+
+# Logs e relatórios de cache/erros
+npm-debug.log*
+yarn-error.log*
+npm-cache/
+coverage/
+
+# Arquivos de ambiente locais. Use 'environment.ts' para defaults
+# e mantenha os segredos locais fora do repositório.
+.env
+
+# 4. Terraform
+# ===============================================
+# Diretório local do Terraform que contém os providers baixados.
+# Recriado com 'terraform init'.
+.terraform/
+
+# Arquivos de estado locais. CRÍTICO para segurança!
+# Nossos estados estarão no backend do GCS, mas esta regra previne
+# o commit acidental de um estado local que pode conter segredos.
+*.tfstate
+*.tfstate.backup
+
+# Arquivos de plano de execução. Podem conter dados sensíveis em texto puro.
+*.tfplan
+
+# Logs de erro do Terraform
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# 5. Docker
+# ===============================================
+# Normalmente, os arquivos .dockerignore cuidam do contexto do build.
+# Adicionar .env aqui novamente garante que segredos usados pelo docker-compose local
+# não sejam commitados.
+.env

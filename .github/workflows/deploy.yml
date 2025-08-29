@@ -28,14 +28,14 @@ jobs:
       with:
         node-version: '18'
         cache: 'npm'
-        cache-dependency-path: frontend-static/package-lock.json
+        cache-dependency-path: frontend/package-lock.json
 
     - name: Install dependencies
-      working-directory: frontend-static
+      working-directory: frontend
       run: npm ci
 
     - name: Build Angular app
-      working-directory: frontend-static
+      working-directory: frontend
       run: npm run build --configuration production
 
     - name: Google Auth
@@ -50,7 +50,7 @@ jobs:
 
     - name: Upload to Cloud Storage
       run: |
-        gsutil -m rsync -r frontend-static/dist/frontend gs://$BUCKET_NAME
+        gsutil -m rsync -r frontend/dist/frontend gs://$BUCKET_NAME
 
     - name: Set Cache-Control metadata
       run: |

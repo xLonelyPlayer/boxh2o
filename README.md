@@ -16,7 +16,7 @@ Este projeto implementa uma aplicação web Angular hospedada no Google Cloud St
 
 ## Estrutura do Projeto
 ```
-├── frontend-static/     # Aplicação Angular
+├── frontend/     # Aplicação Angular
 ├── terraform/           # Configurações IaC
 └── .github/workflows    # Pipeline CI/CD
 ```
@@ -31,7 +31,7 @@ cd boxh2o
 
 2. Instale as dependências e execute o frontend:
 ```bash
-cd frontend-static
+cd frontend
 npm install
 ng serve
 ```
