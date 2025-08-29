@@ -9,7 +9,7 @@ terraform {
   }
 
   backend "gcs" {
-    bucket = "boxh2o-terraform-state"
+    bucket = "boxh2o-terraform-bucket"
     prefix = "terraform/state"
   }
 }
