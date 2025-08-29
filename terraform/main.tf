@@ -9,25 +9,25 @@ terraform {
   }
 
   backend "gcs" {
-    bucket = "boxh2o-terraform-bucket"
-    prefix = "terraform/state"
+    bucket  = "dev-boxh2o-terraform-state"
+    prefix  = "terraform/state"
   }
 }
 
 provider "google" {
-  project = var.project_id
+  project = var.gcp_project_id
   region  = var.region
 }
 
 # VPC
 resource "google_compute_network" "vpc" {
-  name                    = "${var.project_id}-vpc"
+  name                    = "${var.gcp_project_id}-vpc"
   auto_create_subnetworks = false
 }
 
 # Subnet
 resource "google_compute_subnetwork" "subnet" {
-  name          = "${var.project_id}-subnet"
+  name          = "${var.gcp_project_id}-subnet"
   region        = var.region
   network       = google_compute_network.vpc.name
   ip_cidr_range = var.subnet_cidr
@@ -35,7 +35,7 @@ resource "google_compute_subnetwork" "subnet" {
 
 # GKE Cluster
 resource "google_container_cluster" "primary" {
-  name     = "${var.project_id}-gke"
+  name     = "${var.gcp_project_id}-gke"
   location = var.region
   network  = google_compute_network.vpc.name
   subnetwork = google_compute_subnetwork.subnet.name
@@ -49,7 +49,7 @@ resource "google_container_cluster" "primary" {
 }
 
 resource "google_container_node_pool" "primary_nodes" {
-  name       = "${var.project_id}-node-pool"
+  name       = "${var.gcp_project_id}-node-pool"
   location   = var.region
   cluster    = google_container_cluster.primary.name
   node_count = var.gke_num_nodes
@@ -69,7 +69,7 @@ resource "google_container_node_pool" "primary_nodes" {
     }
 
     labels = {
-      env = var.project_id
+      env = var.gcp_project_id
     }
 
     tags = ["gke-node"]
@@ -78,7 +78,7 @@ resource "google_container_node_pool" "primary_nodes" {
 
 # Cloud SQL
 resource "google_sql_database_instance" "instance" {
-  name             = "${var.project_id}-db"
+  name             = "${var.gcp_project_id}-db"
   database_version = "POSTGRES_14"
   region           = var.region
 
@@ -107,4 +107,44 @@ resource "google_sql_user" "users" {
   name     = var.db_user
   instance = google_sql_database_instance.instance.name
   password = var.db_password
+}
+
+# 1. Cria o "Pool" de identidades externas
+resource "google_iam_workload_identity_pool" "github_pool" {
+  project                   = var.gcp_project_id
+  workload_identity_pool_id = "github-actions-pool"
+  display_name              = "GitHub Actions Pool"
+}
+
+# 2. Cria o "Provedor" de identidades, ligando o Pool ao GitHub
+resource "google_iam_workload_identity_pool_provider" "github_provider" {
+  project                            = var.gcp_project_id
+  workload_identity_pool_id          = google_iam_workload_identity_pool.github_pool.workload_identity_pool_id
+  workload_identity_pool_provider_id = "github-actions-provider"
+  display_name                       = "GitHub Actions Provider"
+  
+  # Mapeia os atributos do token do GitHub para a GCP
+  attribute_mapping = {
+    "google.subject"       = "assertion.sub"
+    "attribute.actor"      = "assertion.actor"
+    "attribute.repository" = "assertion.repository"
+  }
+  
+  # Define o emissor do token (issuer) como sendo o GitHub
+  oidc {
+    issuer_uri = "https://token.actions.githubusercontent.com"
+  }
+}
+
+# 3. Permite que o Provedor do GitHub personifique (impersonate) nossa Conta de Serviço
+resource "google_service_account_iam_member" "wif_iam_binding" {
+  # A conta de serviço que será usada pelo pipeline
+  service_account_id = "projects/${var.gcp_project_id}/serviceAccounts/terraform@${var.gcp_project_id}.iam.gserviceaccount.com"
+  
+  # O papel necessário para a personificação
+  role               = "roles/iam.workloadIdentityUser"
+  
+  # Arquiteto GCP: Define QUEM pode personificar. Neste caso, qualquer workflow
+  # do seu repositório GitHub.
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github_pool.name}/attribute.repository/${var.github_repo}" # Ex: "google-github-actions/auth"
 }

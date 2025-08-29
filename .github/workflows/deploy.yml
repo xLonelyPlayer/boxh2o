@@ -1,60 +1,45 @@
-name: Deploy to GCP
+name: 'Terraform CI/CD'
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    branches:
+      - main
 
-env:
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  BUCKET_NAME: ${{ secrets.GCP_PROJECT_ID }}-website
+# Arquiteto GCP: Permissões essenciais para o WIF funcionar.
+# O id-token: write permite que o workflow gere um OIDC token para a GCP.
+permissions:
+  contents: read
+  id-token: write
 
 jobs:
-  build-and-deploy:
-    name: Build and Deploy
+  terraform:
+    name: 'Terraform Plan and Apply'
     runs-on: ubuntu-latest
 
-    permissions:
-      contents: 'read'
-      id-token: 'write'
-
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v3
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '18'
-        cache: 'npm'
-        cache-dependency-path: frontend/package-lock.json
+      # Arquiteto GCP: Este é o passo mágico. Ele troca o token do GitHub por um token da GCP.
+      - name: 'Authenticate to Google Cloud'
+        id: 'auth'
+        uses: 'google-github-actions/auth@v2'
+        with:
+          # O nome do provedor que criamos com Terraform
+          workload_identity_provider: 'projects/${{ secrets.APP_BOXH2O_PROJECT_ID }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
+          # O email da conta de serviço que o GitHub irá personificar
+          service_account: 'terraform@${{ secrets.APP_BOXH2O_CLIENT_ID }}.iam.gserviceaccount.com'
 
-    - name: Install dependencies
-      working-directory: frontend
-      run: npm ci
+      # A partir daqui, todos os comandos gcloud/terraform estão autenticados
+      - name: 'Set up Cloud SDK'
+        uses: 'google-github-actions/setup-gcloud@v2'
+      
+      - name: Terraform Init
+        run: terraform init
 
-    - name: Build Angular app
-      working-directory: frontend
-      run: npm run build --configuration production
-
-    - name: Google Auth
-      id: auth
-      uses: 'google-github-actions/auth@v1'
-      with:
-        workload_identity_provider: '${{ secrets.WIF_PROVIDER }}'
-        service_account: '${{ secrets.WIF_SERVICE_ACCOUNT }}'
-
-    - name: Set up Cloud SDK
-      uses: google-github-actions/setup-gcloud@v1
-
-    - name: Upload to Cloud Storage
-      run: |
-        gsutil -m rsync -r frontend/dist/frontend gs://$BUCKET_NAME
-
-    - name: Set Cache-Control metadata
-      run: |
-        gsutil -m setmeta -h "Cache-Control:public, max-age=3600" gs://$BUCKET_NAME/**.css
-        gsutil -m setmeta -h "Cache-Control:public, max-age=3600" gs://$BUCKET_NAME/**.js
-        gsutil -m setmeta -h "Cache-Control:public, max-age=86400" gs://$BUCKET_NAME/assets/**
-        gsutil setmeta -h "Cache-Control:no-cache, no-store, must-revalidate" gs://$BUCKET_NAME/index.html
+      - name: Terraform Plan
+        run: terraform plan
+      
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main' # Aplica apenas na branch main
+        run: terraform apply -auto-approve

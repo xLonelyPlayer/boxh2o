@@ -1,4 +1,4 @@
-variable "project_id" {
+variable "gcp_project_id" {
   description = "ID do projeto GCP"
   type        = string
 }
@@ -48,4 +48,9 @@ variable "db_password" {
   description = "Senha do banco de dados"
   type        = string
   sensitive   = true
+}
+
+variable "github_repo" {
+  description = "Repositório GitHub no formato USUARIO/NOME_DO_REPO"
+  type        = string
 }
